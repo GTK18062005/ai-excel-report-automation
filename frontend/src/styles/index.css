@@ -1,0 +1,55 @@
+/* =============================================
+   AI Excel Report Platform - Global Styles
+   ============================================= */
+
+:root {
+  --color-bg: #0f1117;
+  --color-surface: #1a1d27;
+  --color-primary: #6366f1;
+  --color-primary-light: #818cf8;
+  --color-text: #e2e8f0;
+  --color-text-muted: #94a3b8;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* Home Page */
+.home {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.home-content {
+  text-align: center;
+}
+
+.home-content h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 1rem;
+}
+
+.home-content p {
+  font-size: 1.125rem;
+  color: var(--color-text-muted);
+}

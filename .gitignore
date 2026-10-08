@@ -1,0 +1,49 @@
+# Root gitignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Backend
+backend/target/
+backend/*.log
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# Docker
+.env
+
+# Env files
+*.env
+.env.*
+!.env.example
+
+# Uploaded Excel files
+backend/uploads/
+
+# Local testing files
+backend/test-output.txt
+backend/testoutput.txt
+backend/test_understanding.py
+backend/upload_and_test.ps1
+backend/upload_and_test.py
+
+# Eclipse / generated backend files
+backend/bin/
+backend/.classpath
+backend/.project
+backend/.factorypath
+backend/.settings/
+*.class
+
+# Local backend output / diagnostics
+backend/buildoutput.txt
+backend/diagnose_ai.ps1

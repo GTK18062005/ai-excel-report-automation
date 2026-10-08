@@ -1,0 +1,44 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/ai_excel_platform
+    username: postgres
+    password: 1235
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 55MB
+      enabled: true
+  ai:
+    openai:
+      api-key: ${GROQ_API_KEY}
+      base-url: ${GROQ_BASE_URL:https://api.groq.com/openai/v1}
+      chat:
+        options:
+          model:  ${GROQ_MODEL:openai/gpt-oss-20b}
+          temperature: 0.2
+          max-tokens: 4000
+
+server:
+  port: ${SERVER_PORT:8081}
+
+jwt:
+  secret: ${JWT_SECRET:3cfa76ef14937c1c0ea519f8fc057a80fcd04a7e3d90e0ff4c71afa9b2b}
+  expiration: 86400000  # 24 hours in ms
+
+file:
+  upload-dir: ${FILE_UPLOAD_DIR:./uploads}
+
+logging:
+  level:
+    com.aiexcel: DEBUG
+    com.aiexcel.platform.service.WorkbookUnderstandingService: DEBUG
+    org.springframework.ai: DEBUG
+    org.springframework.security: INFO
