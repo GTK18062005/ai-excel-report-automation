@@ -6,16 +6,16 @@ import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Manual Spring AI configuration for OpenAI.
- * Only activated when spring.ai.openai.api-key is set.
+ * Manual Spring AI configuration for OpenAI / Groq.
+ * Only activated when spring.ai.openai.api-key is set and not empty.
  */
 @Configuration
-@ConditionalOnProperty(name = "spring.ai.openai.api-key")
+@ConditionalOnExpression("!'${spring.ai.openai.api-key:}'.trim().isEmpty()")
 public class SpringAiConfig {
 
     @Value("${spring.ai.openai.api-key}")

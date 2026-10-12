@@ -130,9 +130,10 @@ public class AggregateHandler implements WorkflowOperationHandler {
             }
 
             Cell aggCell = row.getCell(aggColIdx);
-            if (aggCell != null && aggCell.getCellType() == CellType.NUMERIC) {
+            Double numericVal = extractNumericValue(aggCell);
+            if (numericVal != null) {
                 groupKeys.add(gk);
-                dataRows.add(new double[]{aggCell.getNumericCellValue()});
+                dataRows.add(new double[]{numericVal});
             }
         }
 
@@ -240,5 +241,21 @@ public class AggregateHandler implements WorkflowOperationHandler {
             case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
             default -> "";
         };
+    }
+
+    private Double extractNumericValue(Cell cell) {
+        if (cell == null) return null;
+        if (cell.getCellType() == CellType.NUMERIC) {
+            return cell.getNumericCellValue();
+        }
+        if (cell.getCellType() == CellType.STRING) {
+            String str = cell.getStringCellValue();
+            if (str != null && !str.isBlank()) {
+                try {
+                    return Double.parseDouble(str.trim());
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return null;
     }
 }

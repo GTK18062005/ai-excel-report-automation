@@ -708,4 +708,102 @@ class CreateChartHandlerTest {
 
         assertTrue(ex.getMessage().contains("sourceSheet"));
     }
+
+    @Test
+    void execute_chainedAggregateToCreateChart_usesAggregatedSheetAndDerivedColumn_reports4PointsNot40() throws Exception {
+        // Create 40 raw transaction rows across 4 categories (10 rows each)
+        List<List<Object>> rows = new ArrayList<>();
+        String[] categories = {"Electronics", "Clothing", "Food", "Books"};
+        for (int i = 0; i < 40; i++) {
+            String cat = categories[i % 4];
+            rows.add(List.of(cat, 10.0 * (i + 1)));
+        }
+        Path path = createWorkbookWith("Sales", List.of("Category", "Revenue"), rows);
+
+        context = buildContext(path, "Sales");
+
+        // Step 1: AGGREGATE
+        WorkflowStep aggStep = WorkflowStep.builder()
+                .order(1)
+                .operation("AGGREGATE")
+                .parameters(Map.of(
+                        "groupColumns", "Category",
+                        "aggregateColumn", "Revenue",
+                        "aggregateFunction", "SUM"))
+                .build();
+
+        StepExecutionResult aggResult = new AggregateHandler().execute(aggStep, context);
+        assertEquals("Sales_agg", aggResult.getSheetName());
+        assertEquals(4, aggResult.getRowCount());
+        assertEquals("Sales_agg", context.getActiveSheet());
+
+        // Step 2: CREATE_CHART referencing raw sheet "Sales" and raw column "Revenue"
+        WorkflowStep chartStep = WorkflowStep.builder()
+                .order(2)
+                .operation("CREATE_CHART")
+                .parameters(Map.of(
+                        "sourceSheet", "Sales",
+                        "chartType", "BAR",
+                        "labelColumn", "Category",
+                        "dataColumn", "Revenue"))
+                .build();
+
+        StepExecutionResult chartResult = new CreateChartHandler().execute(chartStep, context);
+
+        assertEquals(2, chartResult.getOrder());
+        assertEquals("CREATE_CHART", chartResult.getOperation());
+        assertEquals("Sales_agg_chart_data", chartResult.getSheetName());
+        assertEquals(4, chartResult.getRowCount(), "Chart must contain 4 category total points, not 40 raw rows");
+        assertTrue(chartResult.getSummary().contains("4 points"));
+    }
+
+    @Test
+    void execute_chainedGroupByAndAggregateToCreateChart_usesAggregatedSheet_reports4PointsNot40() throws Exception {
+        // 40 rows across 4 categories
+        List<List<Object>> rows = new ArrayList<>();
+        String[] categories = {"Electronics", "Clothing", "Food", "Books"};
+        for (int i = 0; i < 40; i++) {
+            rows.add(List.of(categories[i % 4], 25.0));
+        }
+        Path path = createWorkbookWith("Transactions", List.of("Category", "Amount"), rows);
+
+        context = buildContext(path, "Transactions");
+
+        // Step 1: GROUP_BY
+        WorkflowStep groupStep = WorkflowStep.builder()
+                .order(1)
+                .operation("GROUP_BY")
+                .parameters(Map.of("groupColumns", "Category"))
+                .build();
+        new GroupByHandler().execute(groupStep, context);
+        assertEquals("Transactions_grouped", context.getActiveSheet());
+
+        // Step 2: AGGREGATE
+        WorkflowStep aggStep = WorkflowStep.builder()
+                .order(2)
+                .operation("AGGREGATE")
+                .parameters(Map.of(
+                        "groupColumns", "Category",
+                        "aggregateColumn", "Amount",
+                        "aggregateFunction", "SUM"))
+                .build();
+        new AggregateHandler().execute(aggStep, context);
+        assertEquals("Transactions_grouped_agg", context.getActiveSheet());
+
+        // Step 3: CREATE_CHART with raw parameters
+        WorkflowStep chartStep = WorkflowStep.builder()
+                .order(3)
+                .operation("CREATE_CHART")
+                .parameters(Map.of(
+                        "sourceSheet", "Transactions",
+                        "chartType", "BAR",
+                        "labelColumn", "Category",
+                        "dataColumn", "Amount"))
+                .build();
+
+        StepExecutionResult chartResult = new CreateChartHandler().execute(chartStep, context);
+
+        assertEquals(4, chartResult.getRowCount(), "Chart must contain 4 aggregated category totals, not 40 raw rows");
+        assertTrue(chartResult.getSummary().contains("4 points"));
+    }
 }

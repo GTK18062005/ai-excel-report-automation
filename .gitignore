@@ -27,14 +27,17 @@ frontend/.env.local
 !.env.example
 
 # Uploaded Excel files
-backend/uploads/
+backend/uploads/*
+!backend/uploads/.gitkeep
 
-# Local testing files
+# Local testing & script files
+backend/*.py
+backend/*.ps1
 backend/test-output.txt
 backend/testoutput.txt
-backend/test_understanding.py
-backend/upload_and_test.ps1
-backend/upload_and_test.py
+backend/buildoutput.txt
+backend/diagnose_ai.ps1
+backend/xl/
 
 # Eclipse / generated backend files
 backend/bin/
@@ -44,6 +47,7 @@ backend/.factorypath
 backend/.settings/
 *.class
 
-# Local backend output / diagnostics
-backend/buildoutput.txt
-backend/diagnose_ai.ps1
+# Local environment & config overrides
+backend/application-local.yml
+backend/application-local.properties
+backend/.env

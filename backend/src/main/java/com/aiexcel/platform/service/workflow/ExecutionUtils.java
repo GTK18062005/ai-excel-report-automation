@@ -53,11 +53,11 @@ public final class ExecutionUtils {
         if (sheetName == null || sheetName.isBlank()) {
             throw new WorkflowExecutionException("Step " + stepOrder + ": sheet name is blank");
         }
-        if (context.getInputWorkbook() != null && context.getInputWorkbook().getSheet(sheetName) != null) {
-            return context.getInputWorkbook().getSheet(sheetName);
-        }
         if (context.getOutputWorkbook() != null && context.getOutputWorkbook().getSheet(sheetName) != null) {
             return context.getOutputWorkbook().getSheet(sheetName);
+        }
+        if (context.getInputWorkbook() != null && context.getInputWorkbook().getSheet(sheetName) != null) {
+            return context.getInputWorkbook().getSheet(sheetName);
         }
         throw new WorkflowExecutionException(
                 "Step " + stepOrder + ": sheet '" + sheetName + "' not found in input or output workbook");

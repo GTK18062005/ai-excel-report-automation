@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -77,19 +78,6 @@ public class CreateChartHandler implements WorkflowOperationHandler {
                             + chartType + "'. Supported: " + String.join(", ", ALLOWED_CHART_TYPES));
         }
 
-        // Resolve sourceSheet: prefer explicit parameter, else fall back to first inputSheets entry.
-        String sourceSheet = params.get("sourceSheet");
-        if ((sourceSheet == null || sourceSheet.isBlank()) && step.getInputSheets() != null) {
-            sourceSheet = step.getInputSheets().stream()
-                    .filter(s -> s != null && !s.isBlank())
-                    .findFirst()
-                    .orElse(null);
-        }
-        if (sourceSheet == null || sourceSheet.isBlank()) {
-            throw new WorkflowExecutionException(
-                    "CREATE_CHART step " + step.getOrder() + ": parameter 'sourceSheet' is required");
-        }
-
         // Resolve labelColumn: prefer explicit parameter, else fall back to first inputColumns entry.
         String labelColumn = params.get("labelColumn");
         if ((labelColumn == null || labelColumn.isBlank()) && step.getInputColumns() != null
@@ -113,7 +101,10 @@ public class CreateChartHandler implements WorkflowOperationHandler {
                     "CREATE_CHART step " + step.getOrder() + ": parameter 'dataColumn' is required");
         }
 
-        // Resolve source sheet via the standard utility (input first, then output)
+        // Resolve sourceSheet using context-aware, column-verified candidate resolution
+        String sourceSheet = resolveSourceSheetName(step, context, params, labelColumn, dataColumn);
+
+        // Resolve source sheet via the standard utility
         Sheet resolved = ExecutionUtils.findSheet(context, sourceSheet, step.getOrder());
         if (resolved == null) {
             throw new WorkflowExecutionException(
@@ -148,14 +139,14 @@ public class CreateChartHandler implements WorkflowOperationHandler {
                     ? hc.getStringCellValue().trim() : "");
         }
 
-        int labelIdx = headers.indexOf(labelColumn);
+        int labelIdx = resolveColumnIndex(headers, labelColumn);
         if (labelIdx < 0) {
             throw new WorkflowExecutionException(
                     "CREATE_CHART step " + step.getOrder() + ": labelColumn '"
                             + labelColumn + "' not found in sheet '" + sourceSheet + "'");
         }
 
-        int dataIdx = headers.indexOf(dataColumn);
+        int dataIdx = resolveColumnIndex(headers, dataColumn);
         if (dataIdx < 0) {
             throw new WorkflowExecutionException(
                     "CREATE_CHART step " + step.getOrder() + ": dataColumn '"
@@ -168,7 +159,7 @@ public class CreateChartHandler implements WorkflowOperationHandler {
             Row row = resolved.getRow(r);
             if (row == null) continue;
             Cell c = row.getCell(dataIdx);
-            if (c != null && c.getCellType() == CellType.NUMERIC) {
+            if (extractNumericValue(c) != null) {
                 numericCount++;
             }
         }
@@ -197,7 +188,8 @@ public class CreateChartHandler implements WorkflowOperationHandler {
             if (srcRow == null) continue;
             Cell labelCell = srcRow.getCell(labelIdx);
             Cell dataCell  = srcRow.getCell(dataIdx);
-            if (dataCell == null || dataCell.getCellType() != CellType.NUMERIC) continue;
+            Double numVal = extractNumericValue(dataCell);
+            if (numVal == null) continue;
             Row outRow = targetSheet.createRow(outRowIdx++);
             Cell lbl = outRow.createCell(0);
             if (labelCell != null) {
@@ -209,7 +201,7 @@ public class CreateChartHandler implements WorkflowOperationHandler {
                 }
             }
             Cell val = outRow.createCell(1);
-            val.setCellValue(dataCell.getNumericCellValue());
+            val.setCellValue(numVal);
         }
         int dataStartRow = 1;
         int dataEndRow = outRowIdx - 1;
@@ -277,5 +269,121 @@ public class CreateChartHandler implements WorkflowOperationHandler {
                 .summary(summary)
                 .nextActiveSheet(outSheetName)
                 .build();
+    }
+
+    private int resolveColumnIndex(List<String> headers, String targetColumn) {
+        if (targetColumn == null || targetColumn.isBlank() || headers == null) {
+            return -1;
+        }
+        String trimmedTarget = targetColumn.trim();
+
+        // 1. Exact match
+        int idx = headers.indexOf(trimmedTarget);
+        if (idx >= 0) return idx;
+
+        // 2. Case-insensitive exact match
+        for (int i = 0; i < headers.size(); i++) {
+            if (headers.get(i) != null && headers.get(i).equalsIgnoreCase(trimmedTarget)) {
+                return i;
+            }
+        }
+
+        // 3. Prefix match with suffix (e.g. "Revenue" -> "Revenue_SUM", "Revenue_AVERAGE")
+        String lowerTarget = trimmedTarget.toLowerCase(Locale.ROOT);
+        for (int i = 0; i < headers.size(); i++) {
+            String h = headers.get(i);
+            if (h == null) continue;
+            String lowerHeader = h.toLowerCase(Locale.ROOT);
+            if (lowerHeader.startsWith(lowerTarget + "_") || lowerHeader.startsWith(lowerTarget + " ")) {
+                return i;
+            }
+        }
+
+        // 4. Substring / contains match
+        for (int i = 0; i < headers.size(); i++) {
+            String h = headers.get(i);
+            if (h != null && h.toLowerCase(Locale.ROOT).contains(lowerTarget)) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private Double extractNumericValue(Cell cell) {
+        if (cell == null) return null;
+        if (cell.getCellType() == CellType.NUMERIC) {
+            return cell.getNumericCellValue();
+        }
+        if (cell.getCellType() == CellType.STRING) {
+            String str = cell.getStringCellValue();
+            if (str != null && !str.isBlank()) {
+                try {
+                    return Double.parseDouble(str.trim());
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return null;
+    }
+
+    private String resolveSourceSheetName(WorkflowStep step, ExecutionContext context, Map<String, String> params, String labelColumn, String dataColumn) {
+        String explicitSource = params.get("sourceSheet");
+        String inputSource = (step.getInputSheets() != null && !step.getInputSheets().isEmpty())
+                ? step.getInputSheets().get(0) : null;
+
+        boolean hasExplicitBlank = params.containsKey("sourceSheet") && (explicitSource == null || explicitSource.isBlank());
+        if (hasExplicitBlank) {
+            throw new WorkflowExecutionException(
+                    "CREATE_CHART step " + step.getOrder() + ": parameter 'sourceSheet' is required");
+        }
+
+        String requestedSource = (explicitSource != null && !explicitSource.isBlank())
+                ? explicitSource.trim()
+                : (inputSource != null && !inputSource.isBlank() ? inputSource.trim() : null);
+
+        if (requestedSource == null) {
+            throw new WorkflowExecutionException(
+                    "CREATE_CHART step " + step.getOrder() + ": parameter 'sourceSheet' is required");
+        }
+
+        List<String> candidates = new ArrayList<>();
+
+        if (context.getActiveSheet() != null && !context.getActiveSheet().isBlank()) {
+            String active = context.getActiveSheet().trim();
+            if (active.equalsIgnoreCase(requestedSource)
+                    || active.toLowerCase(Locale.ROOT).startsWith(requestedSource.toLowerCase(Locale.ROOT))) {
+                candidates.add(active);
+            }
+        }
+
+        candidates.add(requestedSource + "_agg");
+        candidates.add(requestedSource + "_grouped");
+        candidates.add(requestedSource);
+
+        if (context.getOutputWorkbook() != null) {
+            for (String cand : candidates) {
+                Sheet s = context.getOutputWorkbook().getSheet(cand);
+                if (s != null && hasBothColumns(s, labelColumn, dataColumn)) {
+                    return cand;
+                }
+            }
+        }
+
+        return requestedSource;
+    }
+
+    private boolean hasBothColumns(Sheet sheet, String labelColumn, String dataColumn) {
+        if (sheet == null) return false;
+        int firstRow = sheet.getFirstRowNum();
+        if (firstRow < 0) return false;
+        Row headerRow = sheet.getRow(firstRow);
+        if (headerRow == null) return false;
+        int colCount = headerRow.getLastCellNum();
+        List<String> headers = new ArrayList<>();
+        for (int c = 0; c < colCount; c++) {
+            Cell hc = headerRow.getCell(c);
+            headers.add(hc != null && hc.getCellType() == CellType.STRING ? hc.getStringCellValue().trim() : "");
+        }
+        return resolveColumnIndex(headers, labelColumn) >= 0 && resolveColumnIndex(headers, dataColumn) >= 0;
     }
 }
